@@ -14,7 +14,7 @@ PG_CFG = dict(
     port=5432,
     dbname="reconocimiento",
     user="postgres",
-    password="admin"
+    password="1234"
 )
 THRESHOLD = 0.60      # 0.58-0.62 suele ir bien con face_recognition
 # ===================
@@ -79,7 +79,7 @@ def etiquetar_caras(frame_bgr, base_embs, base_labels):
     labels = []
     if len(boxes_small) > 0:
         # encodings sobre la misma imagen (rgb_small) y esas boxes
-        encs = face_recognition.face_encodings(rgb_small, known_face_locations=boxes_small, num_jitters=1)
+        encs = face_recognition.face_encodings(rgb_small, known_face_locations=boxes_small, num_jitters=1)[0]
 
         for enc in encs:
             label = "Desconocido"
