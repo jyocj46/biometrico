@@ -14,7 +14,7 @@ PG_CFG = dict(
     host="localhost",
     port=5432,
     dbname="reconocimiento",  # tu BD
-    user="admin",          # tu usuario
+    user="postgres",          # tu usuario
     password="admin"    # tu password
 )
 # ============================================
