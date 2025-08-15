@@ -13,8 +13,8 @@ PG_CFG = dict(
     host="localhost",
     port=5432,
     dbname="reconocimiento",
-    user="postgres",
-    password="1234"
+    user="admin",
+    password="admin"
 )
 THRESHOLD = 0.60      # 0.58-0.62 suele ir bien con face_recognition
 # ===================
