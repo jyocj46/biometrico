@@ -21,13 +21,24 @@ PROCESS_EVERY_N = 2         # procesa 1 de cada N frames
 REQUIRED_HITS   = 5         # aciertos seguidos para “loguear”
 
 PG_CFG = dict(
-    host="localhost", port=5432,
-    dbname="reconocimiento", user="postgres", password="1234"
+    host="dpg-d2gdo20dl3ps73f7ic5g-a.oregon-postgres.render.com",
+    port=5432,
+    dbname="reconocimiento_6ezo",
+    user="usr_recon",
+    password="hXcXXHnG17XXr4RDRs3MLmHtFQnM7BA7",
+    sslmode="require",   # Render exige SSL
 )
 # ==========================
 
 def get_pg_conn():
-    return psycopg2.connect(**PG_CFG)
+    return psycopg2.connect(
+        host="dpg-d2gdo20dl3ps73f7ic5g-a.oregon-postgres.render.com",
+        port=5432,
+        dbname="reconocimiento_6ezo",
+        user="usr_recon",
+        password="hXcXXHnG17XXr4RDRs3MLmHtFQnM7BA7",
+        sslmode="require"
+    )
 
 def cargar_base_desde_bd():
     """Lee usuarios (id, nombre, apellido, rostro BYTEA) -> (embs Nx128), (labels), (ids)."""

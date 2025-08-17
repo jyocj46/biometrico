@@ -11,35 +11,44 @@ DOWNSCALE = 0.5       # 0.5 = mas FPS
 CAM_INDEX = 0         # cambia a 1/2 si no abre
 
 PG_CFG = dict(
-    host="localhost",
+    host="dpg-d2gdo20dl3ps73f7ic5g-a.oregon-postgres.render.com",
     port=5432,
-    dbname="reconocimiento",  # tu BD
-    user="postgres",          # tu usuario
-    password="1234"    # tu password
+    dbname="reconocimiento_6ezo",
+    user="usr_recon",
+    password="hXcXXHnG17XXr4RDRs3MLmHtFQnM7BA7",
+    sslmode="require",   # Render exige SSL
 )
 # ============================================
 
 def get_pg_conn():
-    return psycopg2.connect(**PG_CFG)
+    return psycopg2.connect(
+        host="dpg-d2gdo20dl3ps73f7ic5g-a.oregon-postgres.render.com",
+        port=5432,
+        dbname="reconocimiento_6ezo",
+        user="usr_recon",
+        password="hXcXXHnG17XXr4RDRs3MLmHtFQnM7BA7",
+        sslmode="require"
+    )
 
-def insertar_usuario(nombre: str, apellido: str, rostro_bgr: np.ndarray) -> int:
-    """
-    codifica el recorte del rostro a jpg y lo guarda en la tabla 'usuarios'
-    columnas: nombre (text), apellido (text), rostro (bytea)
-    """
+def insertar_usuario(nombre: str, apellido: str, usuario: str, contrasena: str, rostro_bgr: np.ndarray) -> int:
     ok, buf = cv2.imencode(".jpg", rostro_bgr, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
     if not ok:
         raise RuntimeError("no se pudo codificar el recorte a JPEG")
     jpg_bytes = buf.tobytes()
 
+    sql_insert = (
+        "INSERT INTO usuarios (nombre, apellido, usuario, contrasena, rostro) "
+        "VALUES (%s, %s, %s, %s, %s) RETURNING id"
+    )
+
     with get_pg_conn() as conn, conn.cursor() as cur:
-        cur.execute(
-            "INSERT INTO usuarios (nombre, apellido, rostro) VALUES (%s, %s, %s) RETURNING id",
-            (nombre, apellido, Binary(jpg_bytes))
-        )
+        # debug opcional:
+        # print(cur.mogrify(sql_insert, (nombre, apellido, usuario, contrasena, Binary(jpg_bytes))))
+        cur.execute(sql_insert, (nombre, apellido, usuario, contrasena, Binary(jpg_bytes)))
         uid = cur.fetchone()[0]
         conn.commit()
         return uid
+
 
 def main():
     # en windows ayuda CAP_DSHOW
@@ -118,12 +127,14 @@ def main():
             try:
                 nombre = input("Nombre: ").strip() or "sin_nombre"
                 apellido = input("Apellido: ").strip() or "sin_apellido"
+                usuario = input("Usuario: ").strip() or "sin_usuario"
+                contrasena = input("Contrasena: ").strip() or "sin_contrasena"
             except Exception:
-                nombre, apellido = "sin_nombre", "sin_apellido"
+                nombre, apellido, usuario, contrasena = "sin_nombre", "sin_apellido", "sin_usuario", "sin_contrasena"
 
             try:
-                uid = insertar_usuario(nombre, apellido, rostro_bgr)  # seguimos guardando el JPEG del BGR
-                print(f"registrado OK -> id={uid}, {nombre} {apellido}")
+                uid = insertar_usuario(nombre, apellido, usuario, contrasena, rostro_bgr)
+                print(f"registrado OK -> id={uid}, {nombre} {apellido} (usuario: {usuario})")
             except Exception as e:
                 print("error al insertar en BD:", e)
 

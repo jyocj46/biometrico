@@ -10,17 +10,25 @@ DOWNSCALE = 0.5       # factor de reduccion para mas FPS (0.5 recomendado)
 CAM_INDEX = 0         # cambia si tu camara no abre
 
 PG_CFG = dict(
-    host="localhost",
+    host="dpg-d2gdo20dl3ps73f7ic5g-a.oregon-postgres.render.com",
     port=5432,
-    dbname="reconocimiento",
-    user="postgres",
-    password="1234"
+    dbname="reconocimiento_6ezo",
+    user="usr_recon",
+    password="hXcXXHnG17XXr4RDRs3MLmHtFQnM7BA7",
+    sslmode="require",   # Render exige SSL
 )
 THRESHOLD = 0.60      # 0.58-0.62 suele ir bien con face_recognition
 # ===================
 
 def get_pg_conn():
-    return psycopg2.connect(**PG_CFG)
+    return psycopg2.connect(
+        host="dpg-d2gdo20dl3ps73f7ic5g-a.oregon-postgres.render.com",
+        port=5432,
+        dbname="reconocimiento_6ezo",
+        user="usr_recon",
+        password="hXcXXHnG17XXr4RDRs3MLmHtFQnM7BA7",
+        sslmode="require"
+    )
 
 def cargar_base():
     """
@@ -79,7 +87,7 @@ def etiquetar_caras(frame_bgr, base_embs, base_labels):
     labels = []
     if len(boxes_small) > 0:
         # encodings sobre la misma imagen (rgb_small) y esas boxes
-        encs = face_recognition.face_encodings(rgb_small, known_face_locations=boxes_small, num_jitters=1)[0]
+        encs = face_recognition.face_encodings(rgb_small, known_face_locations=boxes_small, num_jitters=1)
 
         for enc in encs:
             label = "Desconocido"
