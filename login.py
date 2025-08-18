@@ -3,10 +3,14 @@ import face_recognition
 import numpy as np
 import psycopg2
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk, messagebox, simpledialog  # <-- NEW: simpledialog
 from PIL import Image, ImageTk
 import threading
 import time
+
+# ====== IMPORTA LA FUNCIÓN DEL PRIMER ARCHIVO ======
+# Cambia 'registrar' por el nombre real de tu primer archivo si es distinto.
+from detectar_rostros import insertar_usuario  # <-- NEW
 
 # ========= Config =========
 USE_CNN         = False     # HOG (False) es mas rapido en CPU
@@ -60,7 +64,6 @@ def cargar_base_desde_bd():
         full_box = [(0, w, h, 0)]
         encs = face_recognition.face_encodings(img_rgb, known_face_locations=full_box, num_jitters=0)
         if not encs:
-            # fallback por si la captura no esta centrada
             locs = face_recognition.face_locations(img_rgb, model=("cnn" if USE_CNN else "hog"),
                                                    number_of_times_to_upsample=0)
             if locs:
@@ -107,7 +110,11 @@ class FaceLoginApp(tk.Tk):
 
         controls = ttk.Frame(self.screen_cam)
         controls.pack(fill="x", pady=6)
-        ttk.Button(controls, text="Recargar BD", command=self.reload_db).pack(side="left")
+
+        # Botón NUEVO: Registrar usuario
+        ttk.Button(controls, text="Registrar usuario", command=self.on_register).pack(side="left", padx=6)  # <-- NEW
+
+        ttk.Button(controls, text="Recargar BD", command=self.reload_db).pack(side="left", padx=6)
         ttk.Button(controls, text="Salir", command=self.on_close).pack(side="right")
 
         hint = ttk.Label(self.screen_cam, text="Coloca tu rostro frente a la camara para iniciar sesion...")
@@ -196,15 +203,20 @@ class FaceLoginApp(tk.Tk):
             for (top, right, bottom, left), text in zip(self.last_boxes, self.last_labels):
                 cv2.rectangle(vis, (left, top), (right, bottom), (0, 200, 0), 2)
                 (tw, th), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)
-                cv2.rectangle(vis, (left, top - th - 8), (left + tw + 6, top), (0, 200, 0), -1)
-                cv2.putText(vis, text, (left + 3, top - 6), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 2)
+                y0 = max(top - th - 8, 0)
+                cv2.rectangle(vis, (left, y0), (left + tw + 6, y0 + th + 8), (0, 200, 0), -1)
+                cv2.putText(vis, text, (left + 3, y0 + th + 2), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 2)
 
             # Mostrar en Tkinter (solo en modo cam)
             if self.mode == "cam":
                 rgb = cv2.cvtColor(vis, cv2.COLOR_BGR2RGB)
                 imgtk = ImageTk.PhotoImage(image=Image.fromarray(rgb))
-                self.video_label.imgtk = imgtk
-                self.video_label.configure(image=imgtk)
+
+                # UI update seguro desde hilo principal
+                def update_ui():
+                    self.video_label.imgtk = imgtk
+                    self.video_label.configure(image=imgtk)
+                self.after(0, update_ui)
 
         # liberar cam al salir
         if self.cap is not None:
@@ -235,6 +247,74 @@ class FaceLoginApp(tk.Tk):
         scale = 1.0 / DOWNSCALE
         boxes = [(int(t*scale), int(r*scale), int(b*scale), int(l*scale)) for (t, r, b, l) in boxes_small]
         return boxes, labels
+
+    # ============ NUEVO: Registrar usuario ============
+    def on_register(self):
+        """
+        Hace un registro estilo 'primer archivo' pero dentro de esta misma ventana:
+         - toma el frame actual
+         - detecta el primer rostro
+         - pide datos (Nombre, Apellido, Usuario, Contrasena)
+         - llama a insertar_usuario(...) del primer archivo
+         - recarga la base en memoria
+        """
+        if self.cap is None:
+            messagebox.showerror("Error", "Camara no inicializada.")
+            return
+
+        # Tomar un frame reciente y nítido
+        ok, frame = self.cap.read()
+        if not ok:
+            messagebox.showerror("Error", "No se pudo leer frame de la camara.")
+            return
+
+        # Detectar rostros en frame completo (como en el primer archivo)
+        small = cv2.resize(frame, None, fx=DOWNSCALE, fy=DOWNSCALE)
+        rgb_small = cv2.cvtColor(small, cv2.COLOR_BGR2RGB)
+        model = "cnn" if USE_CNN else "hog"
+        boxes_small = face_recognition.face_locations(rgb_small, model=model, number_of_times_to_upsample=UPSAMPLE)
+
+        if not boxes_small:
+            messagebox.showinfo("Registro", "No hay rostro claro para registrar. Acércate y mira a la cámara.")
+            return
+
+        # Tomar el primer rostro detectado y reescalar a tamaño original
+        scale = 1.0 / DOWNSCALE
+        t, r, b, l = boxes_small[0]
+        top, right, bottom, left = int(t*scale), int(r*scale), int(b*scale), int(l*scale)
+
+        # Validar recorte
+        if bottom - top <= 0 or right - left <= 0:
+            messagebox.showwarning("Registro", "Recorte vacío o incorrecto. Intenta de nuevo.")
+            return
+
+        rostro_bgr = frame[top:bottom, left:right]
+
+        # Validación rápida: asegurar que haya encoding (igual que el primer archivo)
+        rostro_rgb = cv2.cvtColor(rostro_bgr, cv2.COLOR_BGR2RGB)
+        rostro_rgb = np.ascontiguousarray(rostro_rgb, dtype=np.uint8)
+        h, w = rostro_rgb.shape[:2]
+        full_box = [(0, w, h, 0)]
+        encs = face_recognition.face_encodings(rostro_rgb, known_face_locations=full_box, num_jitters=1)
+        if not encs:
+            messagebox.showinfo("Registro", "No se pudo validar el rostro (sin encoding). Mejora la luz o reencuadra.")
+            return
+
+        # Pedir datos del usuario (como en el primer archivo, con defaults si se deja vacío)
+        nombre = simpledialog.askstring("Registro", "Nombre:", parent=self) or "sin_nombre"
+        apellido = simpledialog.askstring("Registro", "Apellido:", parent=self) or "sin_apellido"
+        usuario = simpledialog.askstring("Registro", "Usuario:", parent=self) or "sin_usuario"
+        contrasena = simpledialog.askstring("Registro", "Contrasena:", parent=self, show="*") or "sin_contrasena"
+
+        # Guardar en BD usando la función del PRIMER ARCHIVO
+        try:
+            uid = insertar_usuario(nombre, apellido, usuario, contrasena, rostro_bgr)
+            messagebox.showinfo("Registro", f"Registrado OK -> id={uid}\n{nombre} {apellido} (usuario: {usuario})")
+            # Recargar base en memoria para que el nuevo aparezca ya disponible
+            self.reload_db()
+        except Exception as e:
+            messagebox.showerror("Error al registrar", str(e))
+    # ============ FIN NUEVO ============
 
     def show_welcome(self, label_text):
         self.welcome_label.config(text=f"Bienvenido: {label_text}")
